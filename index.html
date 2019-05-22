@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🚢💥 Battleship Game</title>
+    <link href="public/Table.css" rel="stylesheet" type="text/css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        var ID = 2;
+        var Num = -1;
+        var $gbShown1;
+        var $gbHidden1;
+        var $gbShown2;
+        var $gbHidden2;
+        $(function () {
+            socket.on('connectToRoom', function (roomNum, peopleNum, gbShown1, gbHidden1, gbShown2, gbHidden2) {
+                console.log("connecting to room on emit");
+                //$('title').text("room number: " + roomNum);
+                $('#roomDigit').html("Room number: " + roomNum);
+                $gbShown1 = gbShown1;
+                $gbHidden1 = gbHidden1;
+                $gbShown2 = gbShown2;
+                $gbHidden2 = gbHidden2;
+                Num = roomNum;
+                if (peopleNum === 2) {
+                    $('h2').remove();
+                    //DrawBoards(lastTurn, gbShown1, gbHidden1, gbShown2, gbHidden2);
+                    $('#randomize').show();
+                    $('#ready').show();
+                    $('#chatPlace').show();
+                    if (ID === 1) {
+                        $('#board1Place').append(generateTable(gbShown1.board, false));
+                        $('#board2Place').append(generateTable(gbHidden1.board, true).attr('id', 'tableTwo'));
+                        $('#turnDisplay').html("Your turn");
+                        socket.emit('turn', ID, Num);
+                    } else if (ID === 2) {
+                        $('#board1Place').append(generateTable(gbShown2.board, false));
+                        $('#board2Place').append(generateTable(gbHidden2.board, true).attr('id', 'tableTwo'));
+                        $('#turnDisplay').html("Opponent's turn");
+                    }
+                    $( "#randomize" ).click(function() {
+                        socket.emit('random', ID, Num, $gbShown1, $gbHidden1, $gbShown2, $gbHidden2);
+                    });
+                }
+                else {
+                    const header = $('<h2>');
+                    ID = 1;
+                    header.text("Waiting for second player...");
+                    $('#boardPlace').append(header);
+                }
+            });
+
+
+            socket.on('disconnected', function () {
+                location.reload();
+            });
+
+
+            socket.on('setUnclickable', function (id) {
+                if (id !== ID) {
+                    unclickable();
+                }
+            });
+
+
+            socket.on('update', function (lastTurn, gbShown1, gbHidden1, gbShown2, gbHidden2) {
+                $('table').remove();
+                if (lastTurn !== ID) {
+                    $('#randomize').prop('disabled', false);
+                    $('#ready').prop('disabled', false);
+                }
+                DrawBoards(lastTurn, gbShown1, gbHidden1, gbShown2, gbHidden2);
+            });
+
+            socket.on('chat message', function(msg){
+                $('#messages').append($('<li>').text(msg));
+            });
+
+            $('#send').submit(function(e){
+                e.preventDefault(); // prevents page reloading
+                socket.emit('chat message', ID+": "+$('#m').val());
+                $('#m').val('');
+                return false;
+            });
+
+            socket.on('end', function (lastTurn, gbShown1, gbHidden1, gbShown2, gbHidden2) {
+                console.log("winner" + lastTurn);
+                $('table').remove();
+                const header = $('h3');
+                $gbShown1 = gbShown1;
+                $gbHidden1 = gbHidden1;
+                $gbShown2 = gbShown2;
+                $gbHidden2 = gbHidden2;
+
+                if (ID === 1) {
+                    $('#board1Place').append(generateTable(gbShown1.board, false));
+                    $('#board2Place').append(generateTable(gbHidden1.board, false).attr('id', 'tableTwo'));
+                    if (lastTurn === 2) {
+                        header.text("You won");
+                    } else header.text("You lost");
+                    unclickable();
+
+                } else {
+                    $('#board1Place').append(generateTable(gbShown2.board, false));
+                    $('#board2Place').append(generateTable(gbHidden2.board, false).attr('id', 'tableTwo'));
+                    if (lastTurn === 1) {
+                        header.text("You won");
+                    } else header.text("You lost");
+                    unclickable();
+                }
+            });
+
+
+        });
+
+        function myFunction(id) {
+            socket.emit("clicked", Num, ID, id, $gbShown1, $gbHidden1, $gbShown2, $gbHidden2);
+            socket.emit('chat message', ID+": "+$('#m').val());
+            $('#m').val('');
+        }
+
+        function unclickable() {
+            var buttons = $('button');
+            buttons.each(function (index, button) {
+                button.disabled = true;
+            });
+        }
+
+        function DrawBoards(lastTurn, gbShown1, gbHidden1, gbShown2, gbHidden2) {
+            $gbShown1 = gbShown1;
+            $gbHidden1 = gbHidden1;
+            $gbShown2 = gbShown2;
+            $gbHidden2 = gbHidden2;
+
+            if (ID === 1) {
+                $('#board1Place').append(generateTable(gbShown1.board, false));
+                $('#board2Place').append(generateTable(gbHidden1.board, true).attr('id', 'tableTwo'));
+                if (lastTurn === 1) {
+                    $('#turnDisplay').html("Opponent's turn");
+                    socket.emit('turn', 2, Num);
+                } else $('#turnDisplay').html("Your turn");
+
+            } else {
+                $('#board1Place').append(generateTable(gbShown2.board, false));
+                $('#board2Place').append(generateTable(gbHidden2.board, true).attr('id', 'tableTwo'));
+                if (lastTurn === 2) {
+                    $('#turnDisplay').html("Opponent's turn");
+                    socket.emit('turn', 1, Num);
+                } else $('#turnDisplay').html("Your turn");
+            }
+        }
+    </script>
+</head>
+<body>
+<script>
+
+
+    function generateTable(board, clickable) {
+        console.log(board);
+        let table = $('<table>');
+        let tr = $("<tr>").addClass('grid');
+        for (i = -1; i < 10; i++) {
+            var td = $("<td>");
+            var div = $("<div>").addClass('content');
+            if (i > -1) div.text(i);
+            td.append(div);
+            tr.append(td);
+        }
+        table.append(tr);
+
+        for (x = 0; x < 10; x++) {
+            tr = $("<tr>").addClass('grid');
+
+            for (y = -1; y < 10; y++) {
+                td = $("<td>");
+                if (y === -1) {
+                    div = $("<div>").addClass('content').text(x);
+                    td.append(div);
+                } else {
+                    var button = $('<button>').addClass('content table-button').attr('id', x + ':' + y);
+                    if (clickable && board[x][y] === "") {
+                        button.attr('onClick', 'myFunction(this.id);');
+                    }
+                    button.text(board[x][y]);
+                    td.append(button);
+                }
+                tr.append(td);
+            }
+
+
+            table.append(tr);
+        }
+        return table;
+    }
+
+
+</script>
+<div id="topPage">
+    <h1>🚢💥 Battleship Game</h1>
+</div>
+<div id="gamePage" style="width: 100%; clear: both;">
+    <h3 id="turnDisplay"></h3>
+    <div id="boardPlace">
+        <div id="board1Place"></div>
+        <div id="board2Place" style="display: none"></div>
+    </div>
+</div>
+<div style="margin-left: 20px; margin-bottom: 10px; margin-top: 550px">
+    <div style="margin-left: 20px; margin-bottom: 10px; margin-top: 550px">
+        <button id="randomize" style="width: 100px; display: none">Random</button>
+        <button id="ready" style="width: 100px; display: none" onclick="$('#board2Place').show(); $('#randomize').hide(); $('#ready').hide(); socket.emit('ready', ID, Num, $gbShown1, $gbHidden1, $gbShown2, $gbHidden2)">Ready</button>
+    </div>
+    <div id="chatPlace" class="down" style="margin-left: 20px; width: 49%; display: none; color: rgba(255,255,255, 0.5)">
+        Chat:
+        <form id="send">
+            <input id="m" autocomplete="off" style="background-color: rgba(255,255,255, 0.5); width: 200px; border: none;"/>
+        </form>
+        <ul id="messages" style="list-style: none; color: rgba(255,255,255, 0.5)"></ul>
+    </div>
+</div>
+<h4 id="roomDigit" style="color: rgba(255,255,255, 0.5)"></h4>
+</body>
+</html>
